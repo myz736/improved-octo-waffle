@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>手势弹球 · 体感游戏</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(145deg, #0b1a2e, #0a111f);
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .game-wrapper {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            border-radius: 36px;
+            padding: 20px 20px 24px;
+            box-shadow: 0 25px 40px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(100, 210, 255, 0.2);
+            border: 1px solid rgba(120, 200, 255, 0.3);
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 8px 12px;
+        }
+        .title {
+            color: #b1e6ff;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-size: 14px;
+            text-shadow: 0 0 8px cyan;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .title i {
+            font-size: 18px;
+            filter: drop-shadow(0 0 6px cyan);
+        }
+        .score-board {
+            background: #04131f;
+            border-radius: 60px;
+            padding: 6px 18px;
+            color: #8df;
+            font-weight: bold;
+            font-size: 22px;
+            border: 1px solid #2e5f7a;
+            box-shadow: inset 0 0 8px #00000055, 0 0 10px #1e4b66;
+            letter-spacing: 2px;
+        }
+        .canvas-container {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 0 0 2px #0e2f3f, 0 20px 30px #00000080;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 30%, #112b3a, #031016);
+            cursor: none;
+        }
+        #videoPreview {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            width: 140px;
+            height: 105px;
+            border-radius: 16px;
+            border: 2px solid #2aa9c9;
+            transform: scaleX(-1);
+            object-fit: cover;
+            background: #000;
+            opacity: 0.85;
+            box-shadow: 0 4px 15px black;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 14px;
+            padding-left: 10px;
+            padding-right: 10px;
+            color: #73c6e0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .badge {
+            background: #0d3143;
+            padding: 6px 16px;
+            border-radius: 50px;
+            border: 1px solid #2e7e9b;
+            box-shadow: inset 0 0 6px #00000070;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .badge span {
+            color: #aae6ff;
+            font-weight: 600;
+        }
+        .hint {
+            color: #5b8b9c;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .restart-btn {
+            background: #143a4c;
+            border: none;
+            color: #b3e6ff;
+            font-weight: 600;
+            padding: 6px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-size: 14px;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            border: 1px solid #2e7e9b;
+            box-shadow: 0 4px 0 #05161f;
+        }
+        .restart-btn:hover {
+            background: #1e5068;
+            color: white;
+            box-shadow: 0 4px 0 #0b2633;
+        }
+        .restart-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #0b2633;
+        }
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #06121bd9;
+            backdrop-filter: blur(5px);
+            color: #b1e6ff;
+            font-weight: 500;
+            gap: 18px;
+            z-index: 100;
+            transition: opacity 0.5s;
+            border-radius: 28px;
+        }
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #1e4a5e;
+            border-top: 5px solid #6dd5ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .permission-note {
+            font-size: 13px;
+            color: #8bb3c4;
+            text-align: center;
+            max-width: 250px;
+        }
+    </style>
+</head>
+<body>
+<div class="game-wrapper">
+    <div class="header">
+        <div class="title">
+            ✋ 手势弹球
+        </div>
+        <div class="score-board" id="scoreDisplay">0</div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="gameCanvas" width="640" height="480"></canvas>
+        <video id="videoPreview" autoplay muted playsinline></video>
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <div>正在启动摄像头…</div>
+            <div class="permission-note">请允许摄像头访问，并将手放在画面中</div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="badge">
+            <span>🖐️</span> 食指控制
+        </div>
+        <div class="hint" id="handHint">
+            ⚡ 请将手放入画面
+        </div>
+        <button class="restart-btn" id="restartBtn">↻ 重来</button>
+    </div>
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "hands": "https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import Hands from 'hands';
+
+    // ---------- 游戏配置 ----------
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const video = document.getElementById('videoPreview');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const handHint = document.getElementById('handHint');
+
+    // 尺寸
+    const CW = 640, CH = 480;
+    canvas.width = CW; canvas.height = CH;
+
+    // 游戏状态
+    let score = 0;
+    let gameActive = false;
+    let handDetected = false;
+
+    // 挡板 (由手部控制)
+    const paddle = {
+        width: 110,
+        height: 18,
+        x: CW / 2 - 55,
+        y: CH - 50,
+        targetX: CW / 2 - 55
+    };
+
+    // 球
+    const ball = {
+        x: CW / 2,
+        y: CH / 2,
+        vx: 3.2,
+        vy: -3.5,
+        radius: 10,
+        speed: 5.6,
+        baseSpeed: 5.6
+    };
+
+    // 重置球 (保持位置)
+    function resetBall() {
+        ball.x = CW / 2;
+        ball.y = CH / 2 + 40;
+        const angle = (Math.random() * 0.7 - 0.35) + Math.PI / 2; // 向上随机角度
+        const sp = ball.baseSpeed;
+        ball.vx = Math.cos(angle) * sp * (Math.random() > 0.5 ? 1 : -1);
+        ball.vy = -Math.abs(Math.sin(angle) * sp);
+        // 防止水平速度过小
+        if (Math.abs(ball.vx) < 1.5) ball.vx = (ball.vx > 0 ? 2.2 : -2.2);
+    }
+
+    // 重置游戏
+    function resetGame() {
+        score = 0;
+        scoreDisplay.textContent = '0';
+        paddle.x = CW / 2 - paddle.width / 2;
+        paddle.targetX = paddle.x;
+        resetBall();
+        ball.y = CH / 2 + 50; // 避免立即得分
+        ball.vy = -Math.abs(ball.vy); // 确保向上
+        gameActive = true;
+        handHint.textContent = handDetected ? '👆 食指移动控制挡板' : '⚡ 请将手放入画面';
+    }
+
+    // ---------- 手部追踪设置 ----------
+    const hands = new Hands({
+        locateFile: (file) => {
+            return `https://fastly.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+        }
+    });
+
+    hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.6,
+        selfieMode: true,  // 镜像模式，与摄像头预览一致 (用户右手在画面右侧)
+    });
+
+    // 存储最新的食指坐标 (归一化 0-1)
+    let indexFingerX = 0.5; // 默认中间
+
+    // 结果处理
+    hands.onResults((results) => {
+        // 默认没有检测到手
+        let detected = false;
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const landmarks = results.multiHandLandmarks[0];
+            // 关键点 8 是食指指尖 (index finger tip)
+            const indexTip = landmarks[8];
+            if (indexTip) {
+                // indexTip.x 范围 0~1 (镜像模式下，左右与现实一致)
+                indexFingerX = indexTip.x;
+                detected = true;
+            }
+        }
+
+        // 更新手部检测状态
+        if (detected !== handDetected) {
+            handDetected = detected;
+            if (!gameActive && handDetected) {
+                // 如果游戏未激活但手出现了，可以提示
+            }
+            handHint.textContent = handDetected ? '👆 食指移动控制挡板' : '⚡ 请将手放入画面';
+        }
+
+        // 如果游戏活跃且检测到手，更新挡板目标位置
+        if (gameActive && handDetected) {
+            // 将归一化 x 映射到画布宽度，并稍微限制边缘
+            let rawX = indexFingerX * CW;
+            // 挡板一半宽度限制
+            const halfW = paddle.width / 2;
+            rawX = Math.min(Math.max(rawX, halfW), CW - halfW);
+            // 目标位置 = 让挡板中心对准食指
+            paddle.targetX = rawX - halfW;
+        }
+    });
+
+    // 初始化摄像头
+    async function initCamera() {
+        try {
+            // 请求摄像头权限
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 640, height: 480, facingMode: 'user' },
+                audio: false
+            });
+            video.srcObject = stream;
+
+            // 等待视频就绪
+            await new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    video.play();
+                    resolve();
+                };
+            });
+
+            // 使用 requestAnimationFrame 循环向 Hands 发送帧
+            const processFrame = async () => {
+                if (video.readyState === 4 && !video.paused) {
+                    try {
+                        await hands.send({ image: video });
+                    } catch (e) {
+                        // 忽略偶尔的发送错误
+                    }
+                }
+                requestAnimationFrame(processFrame);
+            };
+            processFrame();
+
+            // 隐藏加载覆盖层
+            loadingOverlay.classList.add('hidden');
+            // 重置并启动游戏
+            resetGame();
+        } catch (error) {
+            console.error('摄像头错误:', error);
+            loadingOverlay.innerHTML = `
+                <div style="color: #ffa07a; text-align: center; padding: 20px;">
+                    <div style="font-size: 40px; margin-bottom: 10px;">📷❌</div>
+                    <div>无法访问摄像头</div>
+                    <div style="font-size: 13px; margin-top: 12px; color: #b0c7d0;">
+                        请检查权限设置，然后刷新页面
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    // ---------- 游戏更新与渲染 ----------
+    function update() {
+        if (!gameActive) return;
+
+        // 1. 挡板平滑跟随 (lerp)
+        const followSpeed = 0.22;
+        paddle.x += (paddle.targetX - paddle.x) * followSpeed;
+
+        // 边界限制 (防止平滑溢出)
+        const maxX = CW - paddle.width;
+        if (paddle.x < 0) paddle.x = 0;
+        if (paddle.x > maxX) paddle.x = maxX;
+
+        // 2. 球运动
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // 左右墙壁碰撞
+        if (ball.x - ball.radius <= 0) {
+            ball.x = ball.radius;
+            ball.vx = Math.abs(ball.vx);
+        } else if (ball.x + ball.radius >= CW) {
+            ball.x = CW - ball.radius;
+            ball.vx = -Math.abs(ball.vx);
+        }
+
+        // 顶部碰撞 (天花板)
+        if (ball.y - ball.radius <= 0) {
+            ball.y = ball.radius;
+            ball.vy = Math.abs(ball.vy);
+        }
+
+        // 底部: 如果球掉落则重置 + 扣分/重置分数？这里采取重置球并且分数清零 (惩罚)
+        if (ball.y + ball.radius > CH + 30) {
+            // 球掉落 —— 分数清零并重置
+            score = 0;
+            scoreDisplay.textContent = '0';
+            resetBall();
+            // 震动一下提示 (可选)
+            // 重置球位置到中间避免连续掉落
+            ball.y = CH / 2 + 40;
+            ball.vy = -Math.abs(ball.baseSpeed);
+            ball.vx = (Math.random() - 0.5) * 3;
+            return;
+        }
+
+        // 3. 挡板碰撞 (仅当球向下运动且未穿透)
+        if (ball.vy > 0) {
+            // 检测是否与挡板矩形相交
+            const ballLeft = ball.x - ball.radius;
+            const ballRight = ball.x + ball.radius;
+            const ballTop = ball.y - ball.radius;
+            const ballBottom = ball.y + ball.radius;
+
+            const paddleLeft = paddle.x;
+            const paddleRight = paddle.x + paddle.width;
+            const paddleTop = paddle.y;
+            const paddleBottom = paddle.y + paddle.height;
+
+            if (ballRight > paddleLeft && ballLeft < paddleRight &&
+                ballBottom > paddleTop && ballTop < paddleBottom) {
+
+                // 计算相对击中位置 (0~1) 用于改变角度
+                const hitPos = (ball.x - paddleLeft) / paddle.width;
+                const angle = (hitPos - 0.5) * 1.6; // 最大 ±0.8 rad ≈ ±46度
+
+                // 球的新速度方向 (向上)
+                const speed = Math.hypot(ball.vx, ball.vy) * 1.02; // 略微加速
+                const newSpeed = Math.min(speed, 9.0); // 速度上限
+
+                // 计算新角度，保证向上
+                let newVx = Math.sin(angle) * newSpeed;
+                let newVy = -Math.cos(angle) * newSpeed;
+
+                // 如果水平速度太小，增加随机性
+                if (Math.abs(newVx) < 1.2) newVx = (newVx > 0 ? 1.8 : -1.8);
+
+                ball.vx = newVx;
+                ball.vy = newVy;
+
+                // 把球推离挡板防止卡住
+                ball.y = paddleTop - ball.radius - 1;
+
+                // 加分
+                score++;
+                scoreDisplay.textContent = score;
+
+                // 稍微增加基础速度增加难度 (但保留在合理范围内)
+                if (score % 3 === 0 && ball.baseSpeed < 7.8) {
+                    ball.baseSpeed += 0.25;
+                }
+            }
+        }
+
+        // 轻微防止球水平速度过低
+        if (Math.abs(ball.vx) < 1.0) {
+            ball.vx += (ball.vx > 0 ? 1.2 : -1.2);
+        }
+        // 防止垂直速度过低导致水平弹球
+        if (Math.abs(ball.vy) < 2.0 && ball.y < CH - 100) {
+            ball.vy = (ball.vy > 0 ? 2.5 : -2.5);
+        }
+
+        // 避免球卡在底部 (小于CH但大于挡板位置)
+        if (ball.y > CH - 40 && ball.vy > 0) {
+            // 如果掉到挡板下方但还没完全掉出去，重新重置?
+            // 其实不用，交给碰撞处理，但防止意外卡住
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, CW, CH);
+
+        // 画网格 / 科技感背景
+        ctx.strokeStyle = '#1c465a';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < CW; i += 40) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, CH);
+            ctx.strokeStyle = '#1c465a30';
+            ctx.stroke();
+        }
+        for (let i = 0; i < CH; i += 40) {
+            ctx.beginPath();
+            ctx.moveTo(0, i);
+            ctx.lineTo(CW, i);
+            ctx.strokeStyle = '#1c465a30';
+            ctx.stroke();
+        }
+
+        // 画挡板 (霓虹效果)
+        const paddleGrad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x + paddle.width, paddle.y);
+        paddleGrad.addColorStop(0, '#00e0ff');
+        paddleGrad.addColorStop(1, '#a0f0ff');
+        ctx.shadowColor = '#3ad6ff';
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = paddleGrad;
+        ctx.beginPath();
+        ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 10);
+        ctx.fill();
+
+        // 挡板内部高光
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = '#d6f4ff';
+        ctx.beginPath();
+        ctx.roundRect(paddle.x + 2, paddle.y - 1, paddle.width - 4, 4, 4);
+        ctx.fill();
+
+        // 画球 (能量球)
+        ctx.shadowColor = '#ffd966';
+        ctx.shadowBlur = 22;
+        const ballGrad = ctx.createRadialGradient(ball.x-5, ball.y-5, 3, ball.x, ball.y, ball.radius+6);
+        ballGrad.addColorStop(0, '#fff9b0');
+        ballGrad.addColorStop(0.7, '#ffbb33');
+        ballGrad.addColorStop(1, '#ff8800');
+        ctx.fillStyle = ballGrad;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 球外光晕
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = '#ffaa33';
+        ctx.strokeStyle = '#ffeeaa';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius+2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 重置阴影
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        // 如果游戏未激活，显示提示
+        if (!gameActive) {
+            ctx.font = 'bold 26px "Segoe UI", Roboto';
+            ctx.fillStyle = '#b1e6ff';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#00a0ff';
+            ctx.textAlign = 'center';
+            ctx.fillText('⚡ 等待手势', CW/2, CH/2 - 30);
+            ctx.font = 'bold 18px sans-serif';
+            ctx.fillStyle = '#9ac7db';
+            ctx.fillText('将手放在摄像头前', CW/2, CH/2 + 30);
+            ctx.shadowBlur = 0;
+        }
+
+        // 画手部检测指示器 (如果检测到手, 在挡板中央画一个小标记)
+        if (handDetected && gameActive) {
+            ctx.beginPath();
+            ctx.arc(paddle.x + paddle.width/2, paddle.y - 12, 6, 0, 2*Math.PI);
+            ctx.fillStyle = '#6df';
+            ctx.shadowBlur = 16;
+            ctx.shadowColor = '#0cf';
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // 绘制分数在左上角 (备选)
+        // 已用HTML显示
+    }
+
+    // 工具: Canvas roundRect
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        this.moveTo(x + r, y);
+        this.lineTo(x + w - r, y);
+        this.quadraticCurveTo(x + w, y, x + w, y + r);
+        this.lineTo(x + w, y + h - r);
+        this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        this.lineTo(x + r, y + h);
+        this.quadraticCurveTo(x, y + h, x, y + h - r);
+        this.lineTo(x, y + r);
+        this.quadraticCurveTo(x, y, x + r, y);
+        return this;
+    };
+
+    // 主循环
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // ---------- 事件绑定 ----------
+    document.getElementById('restartBtn').addEventListener('click', () => {
+        resetGame();
+    });
+
+    // 初始化
+    (async function main() {
+        // 先绘制一个静态画面
+        gameActive = false;
+        draw();
+        await initCamera();
+        gameLoop();
+    })();
+
+    // 窗口失焦时停止? 不用特别处理，但避免性能问题
+    // 页面隐藏时降低帧率? 不处理也可
+</script>
+</body>
+</html>
